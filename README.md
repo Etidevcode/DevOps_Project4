@@ -121,6 +121,15 @@ Modifications uniquement depuis git
 ![Worflow vprofile-action](images/image9.jpeg)
 
 
+## IAC VPROFILE GITOPS
+
+[IAC-VPROFILE](https://github.com/Etidevcode/iac-vprofile/actions/runs/8859167563/job/24328644233)
+
+## VPROFILE ACTION GITOPS
+
+[VPROFILE-ACTIONS](https://github.com/Etidevcode/vprofile-action/actions)
+
+
 
 
 
