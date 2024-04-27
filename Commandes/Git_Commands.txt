@@ -1,0 +1,278 @@
+$ cd
+
+$ cd ~/.ssh
+
+$ ssh-keygen
+
+$ ls
+actions  actions.pub  id_rsa  id_rsa.pub  known_hosts  known_hosts.old
+
+
+$ cat actions.pub
+
+$ export GIT_SSH_COMMANDS="ssh -i ~/.ssh/actions"
+
+$ cd
+
+$ cd /c/vagrant-vms/DevOps_Project4/devops4sure
+
+$ git clone git@github.com:Etidevcode/iac-vprofile.git
+
+$ ls
+iac-vprofile/
+
+$ git clone git@github.com:Etidevcode/vprofile-action.git
+
+$ ls
+iac-vprofile/  vprofile-action/
+
+$ cd iac-vprofile/
+
+$ git config core.sshCommand "ssh -i ~/.ssh/actions -F /dev/null"
+
+$ cd ../vprofile-action/
+
+$ git config core.sshCommand "ssh -i ~/.ssh/actions -F /dev/null"
+
+$ cd ..
+
+$ ls
+iac-vprofile/  vprofile-action/
+
+$ cp -r iac-vprofile main-iac
+
+$ ls
+iac-vprofile/  main-iac/  vprofile-action/
+
+
+$ cd iac-vprofile/
+
+$ git branch -a
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/stage
+
+$ git checkout stage
+
+$ ls
+README.md  terraform/
+
+$ git status
+
+$ cd ..
+
+$ cd main-iac/
+
+$ git pull
+
+$ git status
+
+$ ls
+README.md  terraform/
+
+$ git merge stage
+
+
+$ git checkout stage
+
+$ git checkout main
+
+$ git status
+
+$ git merge stage
+
+$ git push origin main
+
+
+$ cd vprofile-action/
+
+$ ls
+Dockerfile   README.md  files/       pom.xml  target/
+Jenkinsfile  ansible/   kubernetes/  src/
+
+$ helm create vprofilecharts
+Creating vprofilecharts
+
+$ ls
+Dockerfile   README.md  files/       pom.xml  target/
+Jenkinsfile  ansible/   kubernetes/  src/     vprofilecharts/
+
+$ mkdir helm
+
+$ mv vprofilecharts helm/
+
+$ ls
+Dockerfile   README.md  files/  kubernetes/  src/
+Jenkinsfile  ansible/   helm/   pom.xml      target/
+
+$ ls helm
+vprofilecharts/
+
+$ ls helm/vprofilecharts/
+Chart.yaml  charts/  templates/  values.yaml
+
+$ ls helm/vprofilecharts/templates/
+NOTES.txt     deployment.yaml  ingress.yaml  serviceaccount.yaml
+_helpers.tpl  hpa.yaml         service.yaml  tests/
+
+
+$ rm -rf helm/vprofilecharts/templates/*
+
+$ cp kubernetes/vpro-app/* helm/vprofilecharts/templates/
+
+
+$ ls helm/vprofilecharts/templates/
+app-secret.yml  mcdep.yml            vproapp-service.yml  vproingress.yaml
+db-CIP.yml      rmq-CIP-service.yml  vproappdep.yml
+mc-CIP.yml      rmq-dep.yml          vprodbdep.yml
+
+
+$ ls
+Dockerfile   README.md  files/  kubernetes/  src/
+Jenkinsfile  ansible/   helm/   pom.xml      target/
+
+$ cd helm/vprofilecharts/templates/
+
+$ ls
+app-secret.yml  mcdep.yml            vproapp-service.yml  vproingress.yaml
+db-CIP.yml      rmq-CIP-service.yml  vproappdep.yml
+mc-CIP.yml      rmq-dep.yml          vprodbdep.yml
+
+$ vim vproappdep.yml
+
+$ cd
+
+
+$ aws configure
+AWS Access Key ID [****************AAE5]: 
+AWS Secret Access Key [****************Gk5g]: 
+Default region name [us-east-1]: 
+Default output format [json]:
+
+
+$ rm -rf ~/.kube/config
+
+$ aws eks update-kubeconfig --region us-east-1 --name vprofile-eks
+
+$ kubectl get nodes
+
+$ cd /c/vagrant-vms/DevOps_Project4/devops4sure/iac-vprofile/
+
+$ ls
+README.md  terraform/
+
+
+$ ls -a
+./  ../  .git/  .github/  .gitignore  README.md  terraform/
+
+
+$ cat .github/workflows/terraform.yml
+
+
+$ kubectl delete -f  https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml
+
+
+$ helm list
+
+$ helm uninstall vprofile-stack
+
+$ cat .github/workflows/terraform.yml
+name: "Vprofile IAC"
+on:
+  push:
+    branches:
+      - main
+      - stage
+    paths:
+      - terraform/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - terraform/**
+
+env:
+ # Credentials for deployment to AWS
+ AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+ AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+ # S3 bucket for the Terraform state
+ BUCKET_TF_STATE: ${{ secrets.BUCKET_TF_STATE}}
+ AWS_REGION: us-east-1
+ EKS_CLUSTER: vprofile-eks
+
+jobs:
+   terraform:
+     name: "Apply terraform code changes"
+     runs-on: ubuntu-latest
+     defaults:
+       run:
+         shell: bash
+         working-directory: ./terraform
+
+     steps:
+       - name: Checkout source code
+         uses: actions/checkout@v4
+
+       - name: Setup Terraform with specified version on the runner
+         uses: hashicorp/setup-terraform@v2
+         with:
+           terraform_version: 1.6.3
+
+       - name: Terraform init
+         id: init
+         run: terraform init -backend-config="bucket=$BUCKET_TF_STATE"
+
+       - name: Terraform format
+         id: fmt
+         run: terraform fmt -check
+
+       - name: Terraform validate
+         id: validate
+         run: terraform validate
+
+       - name: Terraform plan
+         id: plan
+         run: terraform plan -no-color -input=false -out planfile
+         continue-on-error: true
+
+       - name: Terraform plan status
+         if: steps.plan.outcome == 'failure'
+         run: exit 1
+
+       - name: Terraform Apply
+         id: apple
+         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+         run: terraform apply -auto-approve -input=false -parallelism=1 planfile
+
+       - name: Configure AWS credentials
+         uses: aws-actions/configure-aws-credentials@v1
+         with:
+           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+           aws-region: ${{ env.AWS_REGION }}
+
+       - name: Get Kube config file
+         id: getconfig
+         if: steps.apple.outcome == 'success'
+         run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+
+       - name: Install Ingress controller
+         if: steps.apple.outcome == 'success' && steps.getconfig.outcome == 'success'
+         run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.3/deploy/static/provider/aws/deploy.yaml
+
+
+$ ls
+README.md  terraform/
+
+$ cd terraform/
+
+$ ls
+eks-cluster.tf  main.tf  outputs.tf  terraform.tf  variables.tf  vpc.tf
+
+$ terraform init -backend-config="bucket=vprofileactions233"
+
+$ terraform init -backend-config="bucket=vprofileactions233"
+
+$ terraform destroy
+
